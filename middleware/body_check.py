@@ -5,7 +5,7 @@ from jsonschema import validate, ValidationError
 from sanic.request import Request
 from sanic.response import json
 
-
+# This function is a decorator for validating the body of a request
 def validate_body(schema: Enum):
     def wraper(f):
         @wraps(f)

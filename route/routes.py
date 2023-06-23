@@ -32,7 +32,6 @@ async def handler_get_all(request: Request) -> HTTPResponse:
 @openapi.summary("Get a route")
 @openapi.description("This is endpoint allows you to get a route.")
 #@validate_body(Schema.GET.value)
-
 async def handler_get(request: Request, id: int) -> HTTPResponse:
       response, code = get_route(id)
       return json(response, code)
@@ -44,7 +43,10 @@ async def handler_get(request: Request, id: int) -> HTTPResponse:
 @validate_body(Schema.UPDATE.value)
 async def handler_update(request: Request) -> HTTPResponse:
       data = request.json
-      response, code = update_route(id=data['id'], name=data['name'], createdAt=data['createdAt'])
+      response, code = update_route(
+            id=data['id'], 
+            name=data['name'], 
+            createdAt=data['createdAt'])
       return json(response, code)
 
 @route.delete("/delete_route/<id:int>")

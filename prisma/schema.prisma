@@ -40,6 +40,7 @@ model analyze {
   id         Int             @id @default(autoincrement())
   routeId    Int
   name       String
+  status     String          @default("In Progress")
   startDate  String
   endDate    String
   supervisor String
@@ -47,24 +48,38 @@ model analyze {
   createdAt  DateTime        @default(now())
   route      route           @relation(fields: [routeId], references: [id])
   images     image_analyse[]
+  sensor     sensor[]
+  robotId    Int
+  Robot      robot           @relation(fields: [robotId], references: [id])
 
   @@index([routeId], map: "analyze_routeId_fkey")
 }
 
 model robot {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   name      String
   ip        String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  Analyze   analyze[]
 }
 
 model image_analyse {
   id        Int      @id @default(autoincrement())
-  name      String
   path      String
-  createdAt DateTime @default(now())
   analyzeId Int
   Analyze   analyze  @relation(fields: [analyzeId], references: [id])
+  createdAt DateTime @default(now())
 
   @@index([analyzeId], map: "image_analyse_analyzeId_fkey")
+}
+
+model sensor {
+  id Int @id @default(autoincrement())
+  analyzeId Int
+  data      Int
+  Analyze   analyze  @relation(fields: [analyzeId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([analyzeId], map: "sensor_analyzeId_fkey")
 }

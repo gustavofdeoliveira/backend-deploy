@@ -1,19 +1,14 @@
-from sanic.response import HTTPResponse,json
-from middleware.body_check import validate_body
-from analyze.utils import Schema
-from analyze.controller import register, get_all, get_analyze, update_analyze, delete_analyze
-from sanic import Blueprint, Websocket, Request
-from ultralytics import YOLO
-import numpy as np
-import cv2 as cv
 import asyncio
+
+import cv2 as cv
+from sanic import Blueprint, Websocket, Request
+from sanic.response import HTTPResponse, json
 from sanic_ext import openapi
+from ultralytics import YOLO
+
+from analyze.controller import register, get_all, get_analyze, update_analyze, delete_analyze, receive_image, \
+    create_sensor_data
 from analyze.service import AnalyzeTestCreate, AnalyzeTestUpdate
-import os
-import boto3
-from botocore.exceptions import ClientError
-import cv2
-from datetime import datetime
 
 analyze = Blueprint('analyze', __name__)
 
@@ -25,11 +20,19 @@ frame_queue = asyncio.Queue()
 @analyze.post("/create")
 @openapi.summary("Create a new analyze")
 @openapi.description("This endpoint allows you to create a new analyze.")
-@openapi.definition(body={'application/json': AnalyzeTestCreate.schema()},)
+@openapi.definition(body={'application/json': AnalyzeTestCreate.schema()}, )
 # @validate_body(Schema.REGISTER.value)
 async def handler_register(request: Request) -> HTTPResponse:
     data = request.json
-    response, code = register(routeId=data['routeId'], name=data['name'], startDate=data['startDate'], endDate=data['endDate'], supervisor=data['supervisor'], operator=data['operator'])
+    response, code = register(
+        routeId=data['routeId'], 
+        name=data['name'], 
+        status='In progress',
+        startDate=data['startDate'],
+        endDate=data['endDate'], 
+        supervisor=data['supervisor'], 
+        operator=data['operator'],
+        robotId=int(data['robotId']))
     return json(response, code)
 
 
@@ -48,50 +51,46 @@ async def handler_get_analyze(request: Request, id: int) -> HTTPResponse:
     response, code = get_analyze(id=id)
     return json(response, code)
 
+
 @analyze.put("/update_analyze")
 @openapi.summary("Update a analyze")
 @openapi.description("This endpoint allows you to update a analyze. And you need to send all data.")
-@openapi.definition(body={'application/json': AnalyzeTestUpdate.schema()},)
-#@validate_body(Schema.UPDATE.value)
+@openapi.definition(body={'application/json': AnalyzeTestUpdate.schema()}, )
+# @validate_body(Schema.UPDATE.value)
 async def handler_update_analyze(request: Request) -> HTTPResponse:
     data = request.json
-    response, code = update_analyze(id=data['id'], routeId=data['routeId'], name=data['name'], startDate=data['startDate'], endDate=data['endDate'], supervisor=data['supervisor'], operator=data['operator'], createdAt=data['createdAt'])
+    response, code = update_analyze(
+        id=data['id'], 
+        routeId=data['routeId'], 
+        name=data['name'], 
+        status=data['status'],
+        startDate=data['startDate'], 
+        endDate=data['endDate'], 
+        supervisor=data['supervisor'],
+        operator=data['operator'])
     return json(response, code)
+
 
 @analyze.delete("/delete_analyze/<id:int>")
 @openapi.summary("Delete a analyze")
 @openapi.description("This endpoint allows you to delete a analyze.")
-#@validate_body(Schema.DELETE.value)
+# @validate_body(Schema.DELETE.value)
 async def handler_delete_analyze(request: Request, id: int) -> HTTPResponse:
     response, code = delete_analyze(id)
     return json(response, code)
 
-@analyze.post("/video_upload")
+
+@analyze.post("/video_upload/<id:int>")
 @openapi.summary("Upload a video from camera")
 @openapi.description("This endpoint allows you to upload a video from camera.")
-async def video_upload(request: Request) -> json:
-    print(len(request.files.get('image')))
-    print(type(request.files.get('image')))
-    image_bytes = request.files.get('image')[1]
-    nparr = np.fromstring(image_bytes, np.uint8)
-    img = cv.imdecode(nparr, cv.IMREAD_COLOR)
-    result = model.predict(img, conf=0.4)
-    output_image = result[0].plot()
-    image_name = 'analyze-image-'+ str(datetime.now().strftime("%m-%d-%Y-%H-%M-%S"))+'.jpg'
-    cv2.imwrite('analyze/images/'+ image_name, output_image)
-    
-    images = []
+async def video_upload(request: Request, id: int) -> json:
+    try:
+        image_bytes: bytes = request.files.get('image')[1]
+        response, code = receive_image(image_bytes, id)
+        return json(response, code)
+    except Exception as err:
+        return json({'message': 'Error, image not sent due to this error: {err}'}, 500)
 
-    
-    s3 = boto3.resource('s3')
-    with open('analyze/images/'+image_name, 'rb') as data:
-        s3.Bucket('bucket-analyze-images').put_object(Key=image_name, Body=data)   
-        images.append('https://bucket-analyze-images.s3.amazonaws.com/'+image_name)
-    os.remove('analyze/images/'+image_name)
-
-    await frame_queue.put(result[0].plot())
-
-    return json({"status": "success"})
 
 @analyze.websocket("/video_feed")
 @openapi.summary("Get image from camera")
@@ -108,9 +107,45 @@ async def video_feed(request: Request, ws: Websocket):
                 tasks = []
                 for client in clients:
                     tasks.append(asyncio.create_task(client.send(frame_bytes)))
-    
+
                 await asyncio.gather(*tasks)
+            else:
+                break
     except Exception as err:
         print(err)
     finally:
         clients.remove(ws)
+        return json({'message': 'No video available'}, 200)
+
+
+VALORES_RECEBIDOS = []
+
+
+@analyze.websocket("/gas-sensor/<id:int>")
+async def gas_sensor(request: Request, ws: Websocket, id: int):
+    while True:
+        try:
+            data = await ws.recv()
+            if isinstance(data, str) and data.isdigit() and int(data) > 0:
+                VALORES_RECEBIDOS.insert(0, int(data))
+                print(f'CHEGOU O VALOR! ---> {data}')
+                response, code = create_sensor_data(id, int(data))
+            if response:
+                await ws.send(f"{response['message']} with code {code}")
+            else:
+                await ws.send(f"Data is not valid!")
+        except Exception as err:
+            print(f"ERROOORR!! {err}")
+
+
+@analyze.websocket("/gas-sensor-frontend")
+async def gas_sensor_reading(request: Request, ws: Websocket):
+    while True:
+        try:
+            if VALORES_RECEBIDOS:
+                await ws.send(str(VALORES_RECEBIDOS.pop()))
+            else:
+                await asyncio.sleep(0.5)
+        except Exception as err:
+            print(f"ERROOORR!! {err}")
+            await asyncio.sleep(1)

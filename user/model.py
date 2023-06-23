@@ -1,7 +1,7 @@
 from __init__ import db
 from prisma import Prisma
 
-
+# This function creates a user with the provided details and returns a user.
 def create_user(name: str, email: str, password: str) -> bool:
     data = {
         'name': name,
@@ -16,7 +16,7 @@ def create_user(name: str, email: str, password: str) -> bool:
         return True
     raise NameError(f"User already exists with the email: {email}")
 
-
+# This function gets all the users in the database and returns a list of users.
 def get_user_by_email(email: str) -> Prisma.user:
     try:
         user = db.user.find_unique(where={'email': email})
@@ -26,7 +26,7 @@ def get_user_by_email(email: str) -> Prisma.user:
     except:
         raise NameError(f"User does not exists with the email: {email}")
 
-
+# This function gets all the users in the database and returns a list of users.
 def get_user_by_id(id: str) -> dict[str, str]:
     try:
         user = db.user.find_unique(where={'id': id})

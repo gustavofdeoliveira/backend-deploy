@@ -4,14 +4,14 @@ import bcrypt
 import jwt
 from user.model import create_user, get_user_by_email, get_user_by_id
 
-
+# Class User
 class User:
-
+    # Constructor
     def __init__(self, name: str, email: str, password: str):
         self.name = name
         self.email = email
         self.password = password
-
+    # This function registers a user with the provided details and returns a user.
     def register(self) -> str:
         # Encrypting the password
         password = str(self.password)
@@ -23,7 +23,8 @@ class User:
         create_user(name=self.name, email=self.email, password=password_crypt)
 
         return f"User: {self.name}, created successfully"
-
+    
+    # This function gets the user with the provided id and returns a user.
     def login(self) -> tuple[str, str]:
         try:
             user = get_user_by_email(email=self.email)
@@ -37,7 +38,8 @@ class User:
             return f"Thank you for login!", token
 
         raise NameError("Incorrect password!")
-
+    
+    # This function gets the user with the provided id and returns a user.
     def get_user(self, id: str) -> dict[str, str]:
         user = get_user_by_id(id=id)
         return user
@@ -53,12 +55,13 @@ class User:
     #       payload_data = {'id': user.id, "exp": datetime.utcnow() + timedelta(hours=2)}
     #       token = jwt.encode(payload=payload_data, key='secret')
 
-
+# Class UserTest
 class UserTestCreate(BaseModel):
     name : str = "Test operator Update"
     email: str = "teste@teste.com"
     password: str = "teste123"
 
+# Class UserTest
 class UserTestLogin(BaseModel):
     email: str = "teste@teste.com"
     password: str = "teste123"

@@ -62,3 +62,4 @@ ultralytics==8.0.109
 urllib3==1.26.16
 uvloop==0.17.0
 websockets==11.0.3
+boto3==1.26.151

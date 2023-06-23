@@ -18,5 +18,4 @@ else
     prisma generate
     prisma format
     python app.py
-    
 fi
